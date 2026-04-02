@@ -1,37 +1,39 @@
-"""
-Alpine VS platform — BUILD.bazel added on claude branch.
+"""Alpine VS platform — BUILD.bazel added on claude branch.
 
 Migration status: Phase 1 Bazel migration.
-Build type: Platform-specific (kernel modules, device drivers, vendor code)
+Build type: GNU Make (.mk rules)
 
-Platform modules are built inside the sonic-slave toolchain container.
-The final artifacts are included in platform-specific ONIE images via
-//platform/<name>:BUILD.bazel.
+Alpine VS is the virtual switch platform used for testing. It contains
+Make-based build rules (.mk/.dep files) that produce Docker images and
+platform configuration for the virtual switch environment.
 """
 
 package(default_visibility = ["//visibility:public"])
 
 filegroup(
-    name = "platform_srcs",
+    name = "all_srcs",
     srcs = glob(
         ["**/*"],
-        exclude = [".git/**", "build/**", "*.o", "*.ko"],
+        exclude = [".git/**", "build/**"],
     ),
 )
 
+filegroup(
+    name = "platform_rules",
+    srcs = glob(["*.mk", "*.dep", "*.conf"]),
+)
+
 genrule(
-    name = "sonic-alpine_modules",
-    srcs = [":platform_srcs"],
-    outs = ["sonic-alpine_modules.tar.gz"],
+    name = "alpine_vs_platform",
+    srcs = [":all_srcs"],
+    outs = ["alpine-vs-platform.tar.gz"],
     cmd = """
 set -euo pipefail
-# Platform-specific build. Override with platform Makefile conventions.
-SOURCE_DATE_EPOCH=0 make -C $$(dirname $(location :platform_srcs)) -j$$(nproc) 2>&1
-find $(RULEDIR) -name '*.ko' -o -name '*.deb' | \
-  tar -czf $(OUTS) -T - 2>/dev/null || true
+SOURCE_DATE_EPOCH=0 tar --sort=name --mtime=@0 \
+  --owner=0 --group=0 \
+  -czf $(OUTS) -C $$(dirname $(location :all_srcs)) .
 """,
     tags = ["manual", "platform"],
-    execution_requirements = {"requires-network": "0"},
     visibility = ["//visibility:public"],
 )
 
